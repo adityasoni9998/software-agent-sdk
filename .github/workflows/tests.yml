@@ -106,6 +106,10 @@ jobs:
               if: steps.changed.outputs.any_changed == 'true'
               run: uv sync --frozen --group dev
 
+            - name: Install browser for e2e tests
+              if: steps.changed.outputs.any_changed == 'true'
+              run: uvx playwright install chromium --with-deps
+
             - name: Run tools tests with coverage
               if: steps.changed.outputs.any_changed == 'true'
               run: |

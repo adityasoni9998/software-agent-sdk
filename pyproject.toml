@@ -77,8 +77,12 @@ testpaths = [
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --timeout=120"
 asyncio_mode = "auto"
+timeout = 120
+markers = [
+    "e2e: marks tests as end-to-end tests requiring real browser (deselect with '-m \"not e2e\"')",
+]
 
 # Pyright configuration for PEP 420 namespace packages
 # This is needed for VSCode to properly resolve imports across multiple packages in the monorepo
