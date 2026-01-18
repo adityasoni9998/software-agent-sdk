@@ -538,6 +538,12 @@ class Agent(AgentBase):
                 response_token_ids=llm_response.raw_response["choices"][0][
                     "provider_specific_fields"
                 ]["token_ids"],
+                response_logprobs=[
+                    logprob["logprob"]
+                    for logprob in llm_response.raw_response["choices"][0]["logprobs"][
+                        "content"
+                    ]
+                ],
             )
             on_event(token_event)
 

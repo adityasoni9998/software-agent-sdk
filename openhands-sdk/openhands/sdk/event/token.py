@@ -14,3 +14,6 @@ class TokenEvent(Event):
     response_token_ids: list[int] = Field(
         ..., description="The exact response token IDs for this message event"
     )
+    response_logprobs: list[float] = Field(
+        ..., description="Log probabilities for each response token ID"
+    )

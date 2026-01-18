@@ -798,6 +798,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
                     api_key_value = self.api_key.get_secret_value()
 
                 # Some providers need renames handled in _normalize_call_kwargs.
+                kwargs["logprobs"] = True
                 ret = litellm_completion(
                     model=self.model,
                     api_key=api_key_value,
