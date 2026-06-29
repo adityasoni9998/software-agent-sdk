@@ -1,11 +1,11 @@
 """Example: Using custom tools with remote agent server.
 
 This example demonstrates how to use custom tools with a remote agent server
-by building a custom base image that includes the tool implementation and
-exposes it to the binary agent server through ``OH_EXTRA_PYTHON_PATH``.
+by using a runnable source-minimal agent-server image that includes the tool
+implementation and exposes it through ``OH_EXTRA_PYTHON_PATH``.
 
 Prerequisites:
-    1. Build the custom base image first:
+    1. Build the runnable custom agent-server image first:
        cd examples/02_remote_agent_server/06_custom_tool
        ./build_custom_image.sh
 
@@ -14,14 +14,12 @@ Prerequisites:
 The workflow is:
 1. Define a custom tool (LogDataTool for logging structured data to JSON)
 2. Create a simple Dockerfile that copies the tool into the base image
-3. Set OH_EXTRA_PYTHON_PATH so the binary server can import the custom tool
-4. Build the custom base image
-5. Use DockerDevWorkspace with base_image pointing to the custom image
-6. DockerDevWorkspace builds the binary agent server on top of the custom
-   base image
-7. The server dynamically registers tools when the client creates a conversation
-8. The agent can use the custom tool during execution
-9. Verify the logged data by reading the JSON file from the workspace
+3. Set OH_EXTRA_PYTHON_PATH so the server can import the custom tool
+4. Build the runnable source-minimal agent-server image
+5. Use DockerWorkspace with server_image pointing to the runnable image
+6. The server dynamically registers tools when the client creates a conversation
+7. The agent can use the custom tool during execution
+8. Verify the logged data by reading the JSON file from the workspace
 
 This pattern is useful for:
 - Collecting structured data during agent runs (logs, metrics, events)
@@ -31,8 +29,6 @@ This pattern is useful for:
 
 import os
 import platform
-import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -45,7 +41,8 @@ from openhands.sdk import (
     Tool,
     get_logger,
 )
-from openhands.workspace import DockerDevWorkspace
+from openhands.sdk.workspace import PlatformType
+from openhands.workspace import DockerWorkspace
 
 
 logger = get_logger(__name__)
@@ -62,7 +59,7 @@ llm = LLM(
 )
 
 
-def detect_platform():
+def detect_platform() -> PlatformType:
     """Detects the correct Docker platform string."""
     machine = platform.machine().lower()
     if "arm" in machine or "aarch64" in machine:
@@ -70,52 +67,18 @@ def detect_platform():
     return "linux/amd64"
 
 
-# Get the directory containing this script
-example_dir = Path(__file__).parent.absolute()
-
-# Custom base image tag (contains custom tools, agent server built on top)
-CUSTOM_BASE_IMAGE_TAG = "custom-base-image:latest"
-
-# 2) Check if custom base image exists, build if not
-logger.info(f"🔍 Checking for custom base image: {CUSTOM_BASE_IMAGE_TAG}")
-result = subprocess.run(
-    ["docker", "images", "-q", CUSTOM_BASE_IMAGE_TAG],
-    capture_output=True,
-    text=True,
-    check=False,
+# Runnable custom agent-server image produced by build_custom_image.sh.
+CUSTOM_AGENT_SERVER_IMAGE_TAG = os.getenv(
+    "CUSTOM_AGENT_SERVER_IMAGE_TAG",
+    "custom-agent-server:43376f1-codescout-custom-source-minimal",
 )
 
-if not result.stdout.strip():
-    logger.info("⚠️  Custom base image not found. Building...")
-    logger.info("📦 Building custom base image with custom tools...")
-    build_script = example_dir / "build_custom_image.sh"
-    try:
-        subprocess.run(
-            [str(build_script), CUSTOM_BASE_IMAGE_TAG],
-            cwd=str(example_dir),
-            check=True,
-        )
-        logger.info("✅ Custom base image built successfully!")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Failed to build custom base image: {e}")
-        logger.error("Please run ./build_custom_image.sh manually and fix any errors.")
-        sys.exit(1)
-else:
-    logger.info(f"✅ Custom base image found: {CUSTOM_BASE_IMAGE_TAG}")
+logger.info("🚀 Starting custom agent server image: %s", CUSTOM_AGENT_SERVER_IMAGE_TAG)
 
-# 3) Create a DockerDevWorkspace with the custom base image
-#    DockerDevWorkspace will build the binary agent server on top of this
-#    base image
-logger.info("🚀 Building and starting binary agent server with custom tools...")
-logger.info("📦 This may take a few minutes on first run...")
-
-with DockerDevWorkspace(
-    base_image=CUSTOM_BASE_IMAGE_TAG,
+with DockerWorkspace(
+    server_image=CUSTOM_AGENT_SERVER_IMAGE_TAG,
     host_port=8011,
     platform=detect_platform(),
-    # The custom base image sets OH_EXTRA_PYTHON_PATH=/app so the binary
-    # agent server can import custom_tools.log_data from outside the bundle.
-    target="binary",
 ) as workspace:
     logger.info("✅ Custom agent server started!")
 
@@ -250,8 +213,8 @@ with DockerDevWorkspace(
 logger.info("\n✅ Example completed successfully!")
 logger.info("\nThis example demonstrated how to:")
 logger.info("1. Create a custom tool that logs structured data to JSON")
-logger.info("2. Build a base image with the custom tool and OH_EXTRA_PYTHON_PATH")
-logger.info("3. Use DockerDevWorkspace to build the binary agent server")
+logger.info("2. Build a runnable agent-server image with custom tools")
+logger.info("3. Use DockerWorkspace with the custom agent-server image")
 logger.info("4. Enable dynamic tool registration on the server")
 logger.info("5. Use the custom tool during agent execution")
 logger.info("6. Read the logged data back from the workspace")
