@@ -1,50 +1,95 @@
 #!/bin/bash
-# Build script for custom base image with custom tools
+# Build an Apptainer-usable agent-server image with custom CodeScout assets.
 #
-# This script builds a custom base image that includes your custom tools and
-# sets OH_EXTRA_PYTHON_PATH so the binary agent server can import them.
-# When used with DockerDevWorkspace(base_image=..., target="binary"), the
-# agent server will be built on top of this image automatically.
+# This script first builds a local custom base image from this directory, then
+# builds the current SDK's source-minimal agent-server image on top of it. The
+# final image has an agent-server entrypoint, so it can be used directly with
+# DockerWorkspace, ApptainerWorkspace(server_image=...), or apptainer pull.
 #
 # Usage:
-#   ./build_custom_image.sh [TAG]
+#   ./build_custom_image.sh [IMAGE] [CUSTOM_TAG] [--push]
 #
 # Arguments:
-#   TAG: Optional custom tag for the image (default: custom-base-image:latest)
+#   IMAGE: Docker image repository/name for the final server image
+#          (default: custom-agent-server)
+#   CUSTOM_TAG: Tag component used by the SDK docker builder
+#               (default: codescout-custom)
+#   --push: Push the final short-SHA source-minimal tag after building locally
 
 set -e
 
-# Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+BUILD_PY="$REPO_ROOT/openhands-agent-server/openhands/agent_server/docker/build.py"
 
-# Default tag
-TAG="${1:-custom-base-image:latest}"
+IMAGE="custom-agent-server"
+CUSTOM_TAG="codescout-custom"
+PUSH=0
+POSITIONAL_ARG_COUNT=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --push)
+      PUSH=1
+      ;;
+    *)
+      POSITIONAL_ARG_COUNT=$((POSITIONAL_ARG_COUNT + 1))
+      if [ "$POSITIONAL_ARG_COUNT" = "1" ]; then
+        IMAGE="$1"
+      elif [ "$POSITIONAL_ARG_COUNT" = "2" ]; then
+        CUSTOM_TAG="$1"
+      else
+        echo "Unexpected argument: $1" >&2
+        exit 2
+      fi
+      ;;
+  esac
+  shift
+done
 
-echo "🐳 Building custom base image with custom tools and OH_EXTRA_PYTHON_PATH..."
-echo "🏷️  Tag: $TAG"
-echo "📂 Build context: $SCRIPT_DIR"
+TARGET="${TARGET:-source-minimal}"
+PLATFORMS="${PLATFORMS:-linux/amd64}"
+BASE_TAG="${BASE_TAG:-custom-base-image:${CUSTOM_TAG}}"
+SHORT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD)"
+FINAL_TAG="${IMAGE}:${SHORT_SHA}-${CUSTOM_TAG}-${TARGET}"
+
+echo "Building custom base image with custom tools, prompts, and OH_EXTRA_PYTHON_PATH..."
+echo "Base tag: $BASE_TAG"
+echo "Build context: $SCRIPT_DIR"
 echo ""
 
-# Build the image from the example directory
-# The Dockerfile just copies custom_tools into the base image
 docker build \
-  -t "$TAG" \
+  -t "$BASE_TAG" \
   "$SCRIPT_DIR"
 
 echo ""
-echo "✅ Custom base image built successfully!"
-echo "🏷️  Image tag: $TAG"
+echo "Building runnable agent-server image..."
+echo "Final image repository: $IMAGE"
+echo "Custom tag component: $CUSTOM_TAG"
+echo "Target: $TARGET"
+echo "Platforms: $PLATFORMS"
 echo ""
-echo "To use this image:"
-echo "  1. Use in SDK with DockerDevWorkspace:"
-echo "     with DockerDevWorkspace("
-echo "         base_image='$TAG',"
-echo "         host_port=8010,"
-echo "         target='binary',"
-echo "     ) as workspace:"
-echo "         # The image sets OH_EXTRA_PYTHON_PATH for custom tool imports"
-echo "         # your code"
+
+uv run python "$BUILD_PY" \
+  --base-image "$BASE_TAG" \
+  --target "$TARGET" \
+  --image "$IMAGE" \
+  --custom-tags "$CUSTOM_TAG" \
+  --platforms "$PLATFORMS" \
+  --load
+
+if [ "$PUSH" = "1" ]; then
+  echo ""
+  echo "Pushing final runnable image:"
+  echo "  $FINAL_TAG"
+  docker push "$FINAL_TAG"
+fi
+
 echo ""
-echo "  2. Push to registry (optional):"
-echo "     docker tag $TAG your-registry/$TAG"
-echo "     docker push your-registry/$TAG"
+echo "Runnable agent-server image built:"
+echo "  $FINAL_TAG"
+echo ""
+echo "After pushing to a registry, use with ApptainerWorkspace:"
+echo "  ApptainerWorkspace(server_image=\"$FINAL_TAG\")"
+echo ""
+echo "Or convert the pushed image to SIF:"
+echo "  apptainer pull codescout-agent-server.sif docker://$FINAL_TAG"

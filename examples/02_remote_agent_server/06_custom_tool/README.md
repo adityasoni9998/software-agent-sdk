@@ -1,8 +1,8 @@
 # Custom Tools with Remote Agent Server
 
 This example demonstrates how to use custom tools with a remote agent server by
-building a custom base image that includes your tool implementations and exposes
-them to the binary agent server through `OH_EXTRA_PYTHON_PATH`.
+building a runnable source-minimal agent-server image that includes your tool
+implementations and exposes them through `OH_EXTRA_PYTHON_PATH`.
 
 ## Overview
 
@@ -10,10 +10,9 @@ When using a remote agent server, custom tools must be available in the server's
 Python environment. This example shows the complete workflow for:
 
 1. **Defining custom tools** that log structured data to a JSON file
-2. **Building a custom base image** that includes your tools and sets
-   `OH_EXTRA_PYTHON_PATH`
-3. **Using `DockerDevWorkspace`** to build the binary agent server on top of the
-   custom base image
+2. **Building a runnable agent-server image** from a custom base layer that
+   includes your tools and sets `OH_EXTRA_PYTHON_PATH`
+3. **Using `DockerWorkspace` or `ApptainerWorkspace`** with the final image
 4. **Using dynamic tool registration** to make tools available at runtime
 5. **Verifying the results** by reading the logged data back from the workspace
 
@@ -32,7 +31,7 @@ This pattern is useful for:
 ```
 ┌─────────────────┐         ┌──────────────────────────┐
 │   SDK Client    │         │   Remote Agent Server    │
-│                 │         │   (Binary custom image)  │
+│                 │         │ (source-minimal image)   │
 │  - Define tools │◄────────┤                          │
 │  - Send tasks   │   API   │  - Custom tools in       │
 │  - Get results  │         │    OH_EXTRA_PYTHON_PATH  │
@@ -45,9 +44,14 @@ This pattern is useful for:
 ## Files in This Example
 
 - **`custom_tools/log_data.py`**: Example custom tool for logging structured data to JSON
-- **`Dockerfile`**: Simple Dockerfile that copies custom tools into the base image
-- **`build_custom_image.sh`**: Script to build the custom base image
+- **`custom_tools/localization_finish.py`**: CodeScout localization finish tool
+- **`prompts_codescout/system_prompt.j2`**: CodeScout system prompt override
+- **`Dockerfile`**: Simple Dockerfile that copies custom tools and prompts into the base image
+- **`build_custom_image.sh`**: Script to build the runnable source-minimal
+  agent-server image
 - **`main.py`**: SDK script demonstrating the full workflow
+- **`main_codescout_smoke.py`**: No-LLM smoke test for CodeScout image contents
+- **`main_codescout_llm.py`**: LLM-backed test for dynamic registration and tool execution
 - **`README.md`**: This documentation
 
 ## The Custom Tool
@@ -87,16 +91,123 @@ The Dockerfile is very simple:
 ```dockerfile
 FROM nikolaik/python-nodejs:python3.13-nodejs22-slim
 
-# Copy custom tools into a directory outside the frozen binary
+# Copy custom tools and prompt assets into the custom base image
 COPY custom_tools /app/custom_tools
+COPY prompts_codescout /app/prompts_codescout
 
-# Tell the binary agent server where to find external Python modules
+# Tell the agent server where to find external Python modules
 ENV OH_EXTRA_PYTHON_PATH="/app"
 ```
 
-This creates a base image with your custom tools and tells the binary agent
-server where to import them from. The agent server is built on top of this image
-automatically by `DockerDevWorkspace`.
+This creates the custom base layer with your custom tools and tells the agent
+server where to import them from. `build_custom_image.sh` then builds the
+current SDK's source-minimal agent-server image on top of this layer.
+
+### CodeScout Localization Tool
+
+This directory also includes the `LocalizationFinishTool` recovered from the
+older custom image:
+
+- Server import path: `custom_tools.localization_finish`
+- Tool name for `Agent(tools=...)`: `LocalizationFinishTool`
+- User-facing tool title: `localization_finish`
+- System prompt path inside the image:
+  `/app/prompts_codescout/system_prompt.j2`
+
+Use the same import path on the client before creating the conversation:
+
+```python
+import custom_tools.localization_finish  # noqa: F401
+
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name=TerminalTool.name), Tool(name="LocalizationFinishTool")],
+    system_prompt_filename="/app/prompts_codescout/system_prompt.j2",
+    include_default_tools=[],
+)
+```
+
+The client and server must agree on the Python module path for custom action and
+observation classes. If the server imports `custom_tools.localization_finish`
+but the client imports the same file as
+`platoon.codescout.custom_tools.localization_finish`, Python creates separate
+class identities for the same logical schema. Prefer making
+`custom_tools.localization_finish` importable on the client, for example by
+putting `plugins/codescout/platoon/codescout` on `PYTHONPATH`, instead of
+rewriting `__module__` or aliasing `sys.modules`.
+
+Build the runnable source-minimal image with:
+
+```bash
+cd examples/02_remote_agent_server/06_custom_tool
+./build_custom_image.sh docker.io/adityasoni8/eval-agent-server codescout-custom --push
+```
+
+The script prints the final runnable tag, which has this shape:
+
+```text
+docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal
+```
+
+Use that final tag directly with `ApptainerWorkspace`:
+
+```python
+from openhands.workspace import ApptainerWorkspace
+
+with ApptainerWorkspace(
+    server_image="docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal",
+) as workspace:
+    ...
+```
+
+Or convert it to a SIF first:
+
+```bash
+apptainer pull codescout-agent-server.sif \
+  docker://docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal
+```
+
+```python
+with ApptainerWorkspace(sif_file="codescout-agent-server.sif") as workspace:
+    ...
+```
+
+Use the same final tag directly with `DockerWorkspace`:
+
+```python
+from openhands.workspace import DockerWorkspace
+
+with DockerWorkspace(
+    server_image="docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal",
+) as workspace:
+    ...
+```
+
+To test the CodeScout image contents without spending LLM tokens:
+
+```bash
+cd examples/02_remote_agent_server/06_custom_tool
+CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal \
+  uv run python main_codescout_smoke.py
+```
+
+That smoke test starts `DockerWorkspace` from the runnable custom agent-server
+image and verifies:
+
+- `/app/custom_tools/localization_finish.py` exists in the image
+- `/app/prompts_codescout/system_prompt.j2` exists in the image
+- the example exits with `EXAMPLE_COST: 0`
+
+To test dynamic registration and tool execution with an LLM:
+
+```bash
+cd examples/02_remote_agent_server/06_custom_tool
+CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal \
+LLM_BASE_URL=... \
+LLM_MODEL=... \
+LLM_API_KEY=... \
+  uv run python main_codescout_llm.py
+```
 
 ### 3. Dynamic Tool Registration
 
@@ -106,11 +217,16 @@ When creating a conversation, the SDK:
 3. Server imports those modules, triggering auto-registration
 4. Tools become available for agent execution
 
-### 4. SDK Script (`main.py`)
+### 4. Build Script (`build_custom_image.sh`)
 
 The script:
-- Builds the custom base image (if not already built)
-- Uses `DockerDevWorkspace` with `base_image` and `target="binary"` to build the agent server on top
+- Builds the custom base layer
+- Builds the source-minimal agent-server image on top
+- Optionally pushes the final runnable image
+
+### 5. SDK Script (`main.py`)
+
+The SDK script:
 - Creates an agent with the custom tool specified
 - Sends a task that uses the custom tool
 - Agent executes on the remote server with access to the custom tool
@@ -136,12 +252,9 @@ The script:
    python main.py
    ```
 
-The script will:
-- Build the custom base image (first run only)
-- Build the binary agent server on top of the base image (first run may take a few minutes)
-- Start the agent server with custom tools
-- Execute the task using the custom tool
-- Read and display the logged data from the JSON file
+The script will build the final runnable source-minimal image. Use that image
+with `DockerWorkspace`, `ApptainerWorkspace(server_image=...)`, or convert it to
+a SIF and pass `sif_file=...`.
 
 ### Expected Output
 
@@ -223,20 +336,19 @@ register_tool("MyTool", MyTool)
 ### 2. Update the Dockerfile
 
 No changes needed! The Dockerfile already copies all of `custom_tools/` and sets
-`OH_EXTRA_PYTHON_PATH=/app` so the binary agent server can import the package.
+`OH_EXTRA_PYTHON_PATH=/app` so the agent server can import the package.
 
 ### 3. Use Your Tool
 
 In your SDK script:
 
 ```python
-from openhands.workspace import DockerDevWorkspace
+from openhands.workspace import DockerWorkspace
 
-# Use DockerDevWorkspace with your custom base image and binary target
-with DockerDevWorkspace(
-    base_image="custom-base-image:latest",
+# Use DockerWorkspace with your runnable custom agent-server image
+with DockerWorkspace(
+    server_image="custom-agent-server:43376f1-codescout-custom-source-minimal",
     host_port=8010,
-    target="binary",
 ) as workspace:
     # Create agent with your custom tool
     tools = get_default_tools(enable_browser=False)
