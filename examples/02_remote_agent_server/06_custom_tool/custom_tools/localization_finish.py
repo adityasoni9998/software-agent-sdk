@@ -96,7 +96,7 @@ class LocalizationFinishExecutor(ToolExecutor):
         try:
             loc_dict = locations_to_dict_list(action.locations)
             text = json.dumps(loc_dict, indent=2)
-            conversation.state.execution_status = ConversationExecutionStatus.FINISHED
+            conversation.state.execution_status = ConversationExecutionStatus.FINISHED  # type: ignore
             return LocalizationFinishObservation.from_text(text=text)
         except Exception as _:
             return LocalizationFinishObservation.from_text(text="")
