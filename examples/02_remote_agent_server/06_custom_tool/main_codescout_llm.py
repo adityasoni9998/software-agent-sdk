@@ -16,14 +16,17 @@ from pydantic import SecretStr
 
 from openhands.sdk import LLM, Agent, Conversation, RemoteConversation, Tool, get_logger
 from openhands.sdk.event import ActionEvent
-from openhands.sdk.workspace import PlatformType
+from openhands.sdk.workspace import PlatformType, RemoteWorkspace
 from openhands.tools.terminal import TerminalTool
 from openhands.workspace import DockerWorkspace
 
 
 logger = get_logger(__name__)
 
-DEFAULT_IMAGE_TAG = "custom-agent-server:43376f1-codescout-custom-source-minimal"
+DEFAULT_IMAGE_TAG = (
+    "docker.io/adityasoni8/codescout-agent-server-modal-workspace:"
+    "codescout-modal-source-minimal"
+)
 
 
 def detect_platform() -> PlatformType:
@@ -51,6 +54,34 @@ def extract_locations(events: Sequence[Any]) -> list[dict[str, str | None]]:
     return []
 
 
+def create_workspace(image_tag: str, host_port: int) -> RemoteWorkspace:
+    """Create the selected remote workspace for the CodeScout image."""
+    backend = os.getenv("CODESCOUT_WORKSPACE", "docker")
+    if backend == "docker":
+        return DockerWorkspace(
+            server_image=image_tag,
+            host_port=host_port,
+            platform=detect_platform(),
+        )
+    if backend == "modal":
+        from openhands.workspace import ModalWorkspace
+
+        return ModalWorkspace(
+            server_image=image_tag,
+            target_type="source",
+            app_name=os.getenv("MODAL_APP_NAME", "codescout-agent-server"),
+            timeout=int(os.getenv("MODAL_SANDBOX_TIMEOUT", "1800")),
+            startup_timeout=float(os.getenv("MODAL_STARTUP_TIMEOUT", "600")),
+            cpu=float(os.getenv("MODAL_CPU", "1")),
+            memory=int(os.getenv("MODAL_MEMORY", "2048")),
+            registry_secret_name=os.getenv("MODAL_REGISTRY_SECRET_NAME"),
+            expected_server_git_sha=os.getenv("MODAL_EXPECTED_SERVER_GIT_SHA"),
+            sandbox_tags={"purpose": "codescout-localization"},
+            verbose=True,
+        )
+    raise ValueError("CODESCOUT_WORKSPACE must be 'docker' or 'modal'")
+
+
 api_key = os.getenv("LLM_API_KEY")
 assert api_key is not None, "LLM_API_KEY environment variable is not set."
 
@@ -71,11 +102,8 @@ agent = Agent(
     include_default_tools=[],
 )
 
-with DockerWorkspace(
-    server_image=image_tag,
-    host_port=host_port,
-    platform=detect_platform(),
-) as workspace:
+with create_workspace(image_tag, host_port) as workspace:
+    assert isinstance(workspace, RemoteWorkspace)
     setup_result = workspace.execute_command(
         "set -eu\n"
         "cd /workspace/project\n"
