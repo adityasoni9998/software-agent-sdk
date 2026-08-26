@@ -37,7 +37,7 @@ size = "l" if size_value == "l" else "m" if size_value == "m" else "s"
 
 llm = LLM(
     usage_id="sail-smoke-agent",
-    model=os.getenv("LLM_MODEL", "openai/Qwen/Qwen2.5-Coder-7B-Instruct"),
+    model=os.getenv("LLM_MODEL", "openai/qwen3-instruct"),
     base_url=llm_base_url,
     api_key=SecretStr(llm_api_key),
 )

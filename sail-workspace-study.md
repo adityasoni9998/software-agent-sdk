@@ -72,9 +72,17 @@ reachable over SSH at `128.2.205.27`, and its SSH daemon is configured with
 address:
 
 ```bash
-# Start vLLM locally on babel-s9-24.
-vllm serve <model> --host 127.0.0.1 --port 8001 \
-  --api-key local-smoke-key
+# Start vLLM locally on babel-s9-24. The Hermes parser converts Qwen's XML
+# function calls into the OpenAI-compatible tool_calls field OpenHands expects.
+vllm serve Qwen/Qwen3-4B-Instruct-2507 \
+  --served-model-name qwen3-instruct \
+  --host 127.0.0.1 \
+  --port 8001 \
+  --api-key local-smoke-key \
+  --max-model-len 16384 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --generation-config vllm
 
 # Publish that local port on ogma. Keep this process alive for the test.
 ssh -N \
@@ -88,7 +96,7 @@ Then configure the OpenHands client with:
 
 ```bash
 export LLM_API_KEY=local-smoke-key
-export LLM_MODEL=openai/<served-model-name>
+export LLM_MODEL=openai/qwen3-instruct
 export LLM_BASE_URL=http://ogma.lti.cs.cmu.edu:18001/v1
 ```
 
@@ -115,9 +123,17 @@ with SailWorkspace(size="s", memory_limit_gib=8, disk_limit_gib=32) as ws:
     print(result.stdout, end="")
 PY
 
-# With vLLM and the reverse tunnel running, execute a real agent task.
+# With vLLM and the reverse tunnel running, execute a real agent task. Pin the
+# image to a tag built from the same SDK revision instead of mixing this checkout
+# with the mutable latest-python image.
+export SAIL_SERVER_IMAGE=ghcr.io/openhands/agent-server:43376f1-python-amd64
+export SAIL_EXPECTED_SERVER_GIT_SHA=43376f1
 uv run python examples/02_remote_agent_server/17_sail_workspace/main.py
 ```
+
+This sequence was exercised end to end on 2026-08-26. Sail created the box,
+OpenHands used Qwen3 to issue a `file_editor` action, the marker file was read
+back through `RemoteWorkspace`, and the context manager terminated the box.
 
 Every test should use a context manager so failures still terminate the
 billable Sailbox. For debugging a failed launch, set `keep_alive=True`, record
