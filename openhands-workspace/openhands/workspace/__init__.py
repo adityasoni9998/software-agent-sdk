@@ -18,6 +18,7 @@ from .remote_api import APIRemoteWorkspace
 
 if TYPE_CHECKING:
     from .docker import DockerDevWorkspace
+    from .modal import ModalWorkspace
 
 __all__ = [
     "APIRemoteWorkspace",
@@ -26,6 +27,7 @@ __all__ = [
     "DockerDevWorkspace",
     "DockerWorkspace",
     "GitProvider",
+    "ModalWorkspace",
     "OpenHandsCloudWorkspace",
     "PlatformType",
     "RepoMapping",
@@ -35,9 +37,19 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy import DockerDevWorkspace to avoid build module imports."""
+    """Lazy import workspace backends with optional or build-time dependencies."""
     if name == "DockerDevWorkspace":
         from .docker import DockerDevWorkspace
 
         return DockerDevWorkspace
+    if name == "ModalWorkspace":
+        try:
+            from .modal import ModalWorkspace
+        except ImportError as error:
+            raise ImportError(
+                "ModalWorkspace requires the optional Modal dependency. Install "
+                "it with `pip install 'openhands-workspace[modal]'`."
+            ) from error
+
+        return ModalWorkspace
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
