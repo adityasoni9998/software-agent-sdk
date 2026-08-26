@@ -124,6 +124,7 @@ def test_sail_workspace_creates_secured_sailbox(sail_backend):
         "FORWARDED_TOKEN": "token-value",
         "OH_SESSION_API_KEYS_0": "session-key",
     }
+    assert "cwd" not in exec_call.kwargs
     assert workspace.sailbox_id == "sb-test"
     assert workspace.host == "https://sailbox.example.com"
     sail_backend.wait_for_health.assert_called_once_with()

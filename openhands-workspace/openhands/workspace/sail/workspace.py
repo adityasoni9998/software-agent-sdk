@@ -246,7 +246,6 @@ class SailWorkspace(RemoteWorkspace):
         environment["OH_SESSION_API_KEYS_0"] = self.api_key
         self._server_process = self._sailbox.exec(
             self._agent_server_command(),
-            cwd="/",
             env=environment,
         )
 
