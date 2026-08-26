@@ -19,6 +19,7 @@ from .remote_api import APIRemoteWorkspace
 if TYPE_CHECKING:
     from .docker import DockerDevWorkspace
     from .modal import ModalWorkspace
+    from .sail import SailWorkspace
 
 __all__ = [
     "APIRemoteWorkspace",
@@ -32,6 +33,7 @@ __all__ = [
     "PlatformType",
     "RepoMapping",
     "RepoSource",
+    "SailWorkspace",
     "TargetType",
 ]
 
@@ -52,4 +54,14 @@ def __getattr__(name: str):
             ) from error
 
         return ModalWorkspace
+    if name == "SailWorkspace":
+        try:
+            from .sail import SailWorkspace
+        except ImportError as error:
+            raise ImportError(
+                "SailWorkspace requires the optional Sail dependency. Install "
+                "it with `pip install 'openhands-workspace[sail]'`."
+            ) from error
+
+        return SailWorkspace
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

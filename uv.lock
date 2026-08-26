@@ -2694,6 +2694,9 @@ dependencies = [
 modal = [
     { name = "modal" },
 ]
+sail = [
+    { name = "sail" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2701,8 +2704,9 @@ requires-dist = [
     { name = "openhands-agent-server", editable = "openhands-agent-server" },
     { name = "openhands-sdk", editable = "openhands-sdk" },
     { name = "pydantic", specifier = ">=2.11.7" },
+    { name = "sail", marker = "extra == 'sail'", specifier = ">=0.7.1,<1" },
 ]
-provides-extras = ["modal"]
+provides-extras = ["modal", "sail"]
 
 [[package]]
 name = "opentelemetry-api"
@@ -6735,6 +6739,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/62/74/8d69dcb7a9efe8baa2046891735e5dfe433ad558ae23d9e3c14c633d1d58/s3transfer-0.14.0.tar.gz", hash = "sha256:eff12264e7c8b4985074ccce27a3b38a485bb7f7422cc8046fee9be4983e4125", size = 151547, upload-time = "2025-09-09T19:23:31.089Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/48/f0/ae7ca09223a81a1d890b2557186ea015f6e0502e9b8cb8e1813f1d8cfa4e/s3transfer-0.14.0-py3-none-any.whl", hash = "sha256:ea3b790c7077558ed1f02a3072fb3cb992bbbd253392f4b6e9e8976941c7d456", size = 85712, upload-time = "2025-09-09T19:23:30.041Z" },
+]
+
+[[package]]
+name = "sail"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cloudpickle" },
+    { name = "protobuf" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/fc/7195c3dfb07fc438cad3c1c1b63337202a53a5a51eea22fa1d84e5d186ff/sail-0.7.1-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b2b3766eb8ac40b584a733f6465434b32a8d26fed78d5ad5442f2dd609305a5c", size = 13789843, upload-time = "2026-08-17T20:22:47.766Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/8e/ad62a26d959d5d704701ef5668f1006ed2e07e8b08f99b7c685a7663834a/sail-0.7.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:6a12647a7afaec82b04c37944cea77e93e4a54453827af23ec0d5f82b59408fb", size = 13203541, upload-time = "2026-08-17T20:22:50.417Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/f1/b692e935ff5445fc093dd9899377f1302d876172fd556b27fea8df12baa9/sail-0.7.1-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:fa0321101f85fcbccc7c27c2c02e65943c49187a1698962a2ec5f528be8517f3", size = 14944181, upload-time = "2026-08-17T20:22:52.877Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/41/52c48940297c1e9bd86be886a6d345761be3adc3b1f828a2019f830f6701/sail-0.7.1-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:69073f44104d3c32289aabdb7f3424e5c98ebeb0fdf82864b07df958f7374735", size = 14697591, upload-time = "2026-08-17T20:22:56.692Z" },
+    { url = "https://files.pythonhosted.org/packages/57/eb/50105f7f4544c11c589562845802e2c527b1ad7080c18d2e79ae38651b66/sail-0.7.1-cp39-abi3-win_amd64.whl", hash = "sha256:78d2a13ff22ef8474e630faae7bff170c79a4a5ca0209628c93e6a9182a46beb", size = 11356418, upload-time = "2026-08-17T20:22:59.112Z" },
 ]
 
 [[package]]

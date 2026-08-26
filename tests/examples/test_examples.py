@@ -32,6 +32,7 @@ _TARGET_DIRECTORIES = (
     EXAMPLES_ROOT / "01_standalone_sdk" / "43_mixed_marketplace_skills",
     EXAMPLES_ROOT / "02_remote_agent_server" / "06_custom_tool",
     EXAMPLES_ROOT / "02_remote_agent_server" / "16_modal_workspace",
+    EXAMPLES_ROOT / "02_remote_agent_server" / "17_sail_workspace",
     EXAMPLES_ROOT / "05_skills_and_plugins" / "01_loading_agentskills",
     EXAMPLES_ROOT / "05_skills_and_plugins" / "02_loading_plugins",
 )
@@ -60,6 +61,8 @@ _EXCLUDED_EXAMPLES = {
     "examples/02_remote_agent_server/05_vscode_with_docker_sandboxed_server.py",
     # Requires Modal credentials and creates a billable remote Sandbox.
     "examples/02_remote_agent_server/16_modal_workspace/main.py",
+    # Requires Sail credentials and creates a billable remote Sailbox.
+    "examples/02_remote_agent_server/17_sail_workspace/main.py",
 }
 
 
