@@ -16,14 +16,17 @@ from pydantic import SecretStr
 
 from openhands.sdk import LLM, Agent, Conversation, RemoteConversation, Tool, get_logger
 from openhands.sdk.event import ActionEvent
-from openhands.sdk.workspace import PlatformType
+from openhands.sdk.workspace import PlatformType, RemoteWorkspace
 from openhands.tools.terminal import TerminalTool
 from openhands.workspace import DockerWorkspace
 
 
 logger = get_logger(__name__)
 
-DEFAULT_IMAGE_TAG = "custom-agent-server:43376f1-codescout-custom-source-minimal"
+DEFAULT_IMAGE_TAG = (
+    "docker.io/adityasoni8/codescout-agent-server-sail-workspace:"
+    "codescout-sail-source-minimal"
+)
 
 
 def detect_platform() -> PlatformType:
@@ -51,6 +54,36 @@ def extract_locations(events: Sequence[Any]) -> list[dict[str, str | None]]:
     return []
 
 
+def create_workspace(image_tag: str, host_port: int) -> RemoteWorkspace:
+    """Create the selected remote workspace for the CodeScout image."""
+    backend = os.getenv("CODESCOUT_WORKSPACE", "docker")
+    if backend == "docker":
+        return DockerWorkspace(
+            server_image=image_tag,
+            host_port=host_port,
+            platform=detect_platform(),
+        )
+    if backend == "sail":
+        from openhands.workspace import SailWorkspace
+
+        size_value = os.getenv("SAILBOX_SIZE", "s")
+        if size_value not in {"s", "m", "l"}:
+            raise ValueError("SAILBOX_SIZE must be 's', 'm', or 'l'")
+        size = "l" if size_value == "l" else "m" if size_value == "m" else "s"
+        return SailWorkspace(
+            server_image=image_tag,
+            target_type="source",
+            app_name=os.getenv("SAIL_APP_NAME", "codescout-agent-server"),
+            sailbox_name=os.getenv("SAILBOX_NAME"),
+            size=size,
+            memory_limit_gib=int(os.getenv("SAILBOX_MEMORY_GIB", "8")),
+            disk_limit_gib=int(os.getenv("SAILBOX_DISK_GIB", "32")),
+            startup_timeout=float(os.getenv("SAIL_STARTUP_TIMEOUT", "600")),
+            expected_server_git_sha=os.getenv("SAIL_EXPECTED_SERVER_GIT_SHA"),
+        )
+    raise ValueError("CODESCOUT_WORKSPACE must be 'docker' or 'sail'")
+
+
 api_key = os.getenv("LLM_API_KEY")
 assert api_key is not None, "LLM_API_KEY environment variable is not set."
 
@@ -71,11 +104,8 @@ agent = Agent(
     include_default_tools=[],
 )
 
-with DockerWorkspace(
-    server_image=image_tag,
-    host_port=host_port,
-    platform=detect_platform(),
-) as workspace:
+with create_workspace(image_tag, host_port) as workspace:
+    assert isinstance(workspace, RemoteWorkspace)
     setup_result = workspace.execute_command(
         "set -eu\n"
         "cd /workspace/project\n"

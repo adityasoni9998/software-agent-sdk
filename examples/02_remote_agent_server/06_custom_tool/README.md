@@ -12,7 +12,8 @@ Python environment. This example shows the complete workflow for:
 1. **Defining custom tools** that log structured data to a JSON file
 2. **Building a runnable agent-server image** from a custom base layer that
    includes your tools and sets `OH_EXTRA_PYTHON_PATH`
-3. **Using `DockerWorkspace` or `ApptainerWorkspace`** with the final image
+3. **Using `DockerWorkspace`, `SailWorkspace`, or `ApptainerWorkspace`** with
+   the final image
 4. **Using dynamic tool registration** to make tools available at runtime
 5. **Verifying the results** by reading the logged data back from the workspace
 
@@ -140,14 +141,17 @@ Build the runnable source-minimal image with:
 
 ```bash
 cd examples/02_remote_agent_server/06_custom_tool
-./build_custom_image.sh docker.io/adityasoni8/eval-agent-server codescout-custom --push
+./build_custom_image.sh --push
 ```
 
-The script prints the final runnable tag, which has this shape:
+By default, the script publishes an immutable commit tag and a stable tag:
 
 ```text
-docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal
+docker.io/adityasoni8/codescout-agent-server-sail-workspace:<short-sha>-codescout-sail-source-minimal
+docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal
 ```
+
+Set the positional `IMAGE` and `CUSTOM_TAG` arguments to publish elsewhere.
 
 Use that final tag directly with `ApptainerWorkspace`:
 
@@ -155,7 +159,7 @@ Use that final tag directly with `ApptainerWorkspace`:
 from openhands.workspace import ApptainerWorkspace
 
 with ApptainerWorkspace(
-    server_image="docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal",
+    server_image="docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal",
 ) as workspace:
     ...
 ```
@@ -164,7 +168,7 @@ Or convert it to a SIF first:
 
 ```bash
 apptainer pull codescout-agent-server.sif \
-  docker://docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal
+  docker://docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal
 ```
 
 ```python
@@ -178,7 +182,7 @@ Use the same final tag directly with `DockerWorkspace`:
 from openhands.workspace import DockerWorkspace
 
 with DockerWorkspace(
-    server_image="docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal",
+    server_image="docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal",
 ) as workspace:
     ...
 ```
@@ -187,7 +191,7 @@ To test the CodeScout image contents without spending LLM tokens:
 
 ```bash
 cd examples/02_remote_agent_server/06_custom_tool
-CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal \
+CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal \
   uv run python main_codescout_smoke.py
 ```
 
@@ -202,12 +206,34 @@ To test dynamic registration and tool execution with an LLM:
 
 ```bash
 cd examples/02_remote_agent_server/06_custom_tool
-CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/eval-agent-server:<short-sha>-codescout-custom-source-minimal \
+CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal \
 LLM_BASE_URL=... \
 LLM_MODEL=... \
 LLM_API_KEY=... \
   uv run python main_codescout_llm.py
 ```
+
+To run the same CodeScout prompt and toolset in a Sailbox, install the
+optional dependency and authenticate once:
+
+```bash
+uv sync --all-packages --extra sail
+sail auth login
+```
+
+Then select the Sail backend. Because this script builds the `source-minimal`
+target, `SailWorkspace` starts the source agent-server entrypoint:
+
+```bash
+CODESCOUT_WORKSPACE=sail \
+CUSTOM_AGENT_SERVER_IMAGE_TAG=docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal \
+LLM_BASE_URL=... \
+LLM_MODEL=... \
+LLM_API_KEY=... \
+  uv run python main_codescout_llm.py
+```
+
+The published Docker Hub repository must be public for Sail's registry import.
 
 ### 3. Dynamic Tool Registration
 
@@ -222,7 +248,7 @@ When creating a conversation, the SDK:
 The script:
 - Builds the custom base layer
 - Builds the source-minimal agent-server image on top
-- Optionally pushes the final runnable image
+- Optionally pushes immutable and stable runnable image tags
 
 ### 5. SDK Script (`main.py`)
 
@@ -253,8 +279,8 @@ The SDK script:
    ```
 
 The script will build the final runnable source-minimal image. Use that image
-with `DockerWorkspace`, `ApptainerWorkspace(server_image=...)`, or convert it to
-a SIF and pass `sif_file=...`.
+with `DockerWorkspace`, `SailWorkspace`, `ApptainerWorkspace(server_image=...)`,
+or convert it to a SIF and pass `sif_file=...`.
 
 ### Expected Output
 
@@ -347,7 +373,7 @@ from openhands.workspace import DockerWorkspace
 
 # Use DockerWorkspace with your runnable custom agent-server image
 with DockerWorkspace(
-    server_image="custom-agent-server:43376f1-codescout-custom-source-minimal",
+    server_image="docker.io/adityasoni8/codescout-agent-server-sail-workspace:codescout-sail-source-minimal",
     host_port=8010,
 ) as workspace:
     # Create agent with your custom tool

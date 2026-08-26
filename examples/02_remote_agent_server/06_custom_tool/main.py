@@ -70,7 +70,8 @@ def detect_platform() -> PlatformType:
 # Runnable custom agent-server image produced by build_custom_image.sh.
 CUSTOM_AGENT_SERVER_IMAGE_TAG = os.getenv(
     "CUSTOM_AGENT_SERVER_IMAGE_TAG",
-    "custom-agent-server:43376f1-codescout-custom-source-minimal",
+    "docker.io/adityasoni8/codescout-agent-server-sail-workspace:"
+    "codescout-sail-source-minimal",
 )
 
 logger.info("🚀 Starting custom agent server image: %s", CUSTOM_AGENT_SERVER_IMAGE_TAG)

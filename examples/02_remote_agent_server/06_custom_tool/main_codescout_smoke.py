@@ -15,7 +15,10 @@ from openhands.workspace import DockerWorkspace
 
 logger = get_logger(__name__)
 
-DEFAULT_IMAGE_TAG = "custom-agent-server:43376f1-codescout-custom-source-minimal"
+DEFAULT_IMAGE_TAG = (
+    "docker.io/adityasoni8/codescout-agent-server-sail-workspace:"
+    "codescout-sail-source-minimal"
+)
 
 
 def detect_platform() -> PlatformType:
