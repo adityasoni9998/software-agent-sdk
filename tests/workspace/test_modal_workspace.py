@@ -80,6 +80,8 @@ def test_modal_workspace_creates_secured_sandbox(modal_backend):
     )
     call = modal_backend.sandbox_create.call_args
     assert call.args == (
+        "tini",
+        "--",
         "/agent-server/.venv/bin/python",
         "-m",
         "openhands.agent_server",
@@ -115,7 +117,7 @@ def test_modal_workspace_generates_session_key(modal_backend):
     command = modal_backend.sandbox_create.call_args.args
     assert workspace.api_key
     assert environment["OH_SESSION_API_KEYS_0"] == workspace.api_key
-    assert command[0] == "/usr/local/bin/openhands-agent-server"
+    assert command[:3] == ("tini", "--", "/usr/local/bin/openhands-agent-server")
     assert "openhands.agent_server" not in command
 
     workspace.cleanup()

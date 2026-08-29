@@ -240,7 +240,7 @@ class ModalWorkspace(RemoteWorkspace):
             if self.target_type == "binary"
             else "/agent-server/.venv/bin/python"
         )
-        command = [executable]
+        command = ["tini", "--", executable]
         if self.target_type == "source":
             command.extend(["-m", "openhands.agent_server"])
         command.extend(["--host", "0.0.0.0", "--port", str(self.agent_server_port)])
