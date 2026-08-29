@@ -29,6 +29,9 @@ def modal_backend():
             "openhands.workspace.modal.workspace.modal.Image.from_registry"
         ) as image_from_registry,
         patch(
+            "openhands.workspace.modal.workspace.modal.Image.from_name"
+        ) as image_from_name,
+        patch(
             "openhands.workspace.modal.workspace.modal.Sandbox.create",
             return_value=sandbox,
         ) as sandbox_create,
@@ -42,10 +45,12 @@ def modal_backend():
         image = MagicMock()
         app_lookup.return_value = app
         image_from_registry.return_value = image
+        image_from_name.return_value = image
         yield SimpleNamespace(
             app=app,
             app_lookup=app_lookup,
             image=image,
+            image_from_name=image_from_name,
             image_from_registry=image_from_registry,
             sandbox=sandbox,
             sandbox_create=sandbox_create,
@@ -121,6 +126,37 @@ def test_modal_workspace_generates_session_key(modal_backend):
     assert "openhands.agent_server" not in command
 
     workspace.cleanup()
+
+
+def test_modal_workspace_uses_named_server_image(modal_backend):
+    workspace = ModalWorkspace(
+        named_server_image="openhands-agent-server:source-minimal",
+        target_type="source",
+    )
+
+    modal_backend.image_from_name.assert_called_once_with(
+        "openhands-agent-server:source-minimal"
+    )
+    modal_backend.image_from_registry.assert_not_called()
+    assert modal_backend.sandbox_create.call_args.kwargs["image"] is modal_backend.image
+    workspace.cleanup()
+
+
+@pytest.mark.parametrize(
+    "image_kwargs",
+    [
+        {},
+        {
+            "server_image": "registry.example.com/agent-server:latest",
+            "named_server_image": "agent-server:latest",
+        },
+    ],
+)
+def test_modal_workspace_requires_exactly_one_image(modal_backend, image_kwargs):
+    with pytest.raises(ValueError, match="Exactly one of"):
+        ModalWorkspace(**image_kwargs)
+
+    modal_backend.sandbox_create.assert_not_called()
 
 
 def test_modal_workspace_uses_registry_secret(modal_backend):

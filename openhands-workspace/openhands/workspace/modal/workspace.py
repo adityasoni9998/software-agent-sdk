@@ -46,8 +46,15 @@ class ModalWorkspace(RemoteWorkspace):
     server_image: str | None = Field(
         default=None,
         description=(
-            "Container image containing the OpenHands agent-server. Required when "
-            "creating a Sandbox and unused when attaching by sandbox_id."
+            "Registry image containing the OpenHands agent-server. Mutually exclusive "
+            "with named_server_image and unused when attaching by sandbox_id."
+        ),
+    )
+    named_server_image: str | None = Field(
+        default=None,
+        description=(
+            "Published Modal Image containing the OpenHands agent-server. Mutually "
+            "exclusive with server_image and unused when attaching by sandbox_id."
         ),
     )
     app_name: str = Field(
@@ -176,22 +183,30 @@ class ModalWorkspace(RemoteWorkspace):
         logger.info("Modal workspace %s is ready at %s", self.sandbox_id, self.host)
 
     def _create_sandbox(self) -> None:
-        if self.server_image is None:
-            raise ValueError("server_image is required when creating a Modal Sandbox")
+        if (self.server_image is None) == (self.named_server_image is None):
+            raise ValueError(
+                "Exactly one of server_image or named_server_image is required when "
+                "creating a Modal Sandbox"
+            )
 
         app_kwargs: dict[str, Any] = {"create_if_missing": True}
         if self.modal_environment is not None:
             app_kwargs["environment_name"] = self.modal_environment
         app = modal.App.lookup(self.app_name, **app_kwargs)
 
-        registry_secret = None
-        if self.registry_secret_name is not None:
-            registry_secret = modal.Secret.from_name(self.registry_secret_name)
-        image = modal.Image.from_registry(
-            self.server_image,
-            secret=registry_secret,
-            setup_dockerfile_commands=["ENTRYPOINT []"],
-        )
+        image_reference = self.named_server_image or self.server_image
+        if self.named_server_image is not None:
+            image = modal.Image.from_name(self.named_server_image)
+        else:
+            assert self.server_image is not None
+            registry_secret = None
+            if self.registry_secret_name is not None:
+                registry_secret = modal.Secret.from_name(self.registry_secret_name)
+            image = modal.Image.from_registry(
+                self.server_image,
+                secret=registry_secret,
+                setup_dockerfile_commands=["ENTRYPOINT []"],
+            )
 
         if not self.api_key:
             self.api_key = secrets.token_urlsafe(32)
@@ -223,7 +238,7 @@ class ModalWorkspace(RemoteWorkspace):
             {key: value for key, value in optional_kwargs.items() if value is not None}
         )
 
-        logger.info("Creating Modal Sandbox from %s", self.server_image)
+        logger.info("Creating Modal Sandbox from %s", image_reference)
         output_context = (
             modal.enable_output() if self.verbose else contextlib.nullcontext()
         )
