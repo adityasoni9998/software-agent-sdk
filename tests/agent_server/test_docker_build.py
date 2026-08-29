@@ -804,6 +804,57 @@ def test_build_with_telemetry_returns_parsed_buildkit_fields(tmp_path: Path):
     assert result.telemetry.cached_step_count == 1
 
 
+def test_build_with_estargz_uses_registry_output(tmp_path: Path):
+    from openhands.agent_server.docker.build import (
+        BuildOptions,
+        _default_sdk_project_root,
+        build,
+    )
+
+    ctx = tmp_path / "ctx"
+    ctx.mkdir()
+    docker_calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: str | None = None):
+        if cmd[:3] != ["docker", "buildx", "build"]:
+            raise AssertionError(f"unexpected command: {cmd}")
+        docker_calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    opts = BuildOptions(
+        base_image="python:3.12",
+        custom_tags="python",
+        git_sha="abc1234567890",
+        git_ref="refs/heads/main",
+        image="docker.io/example/eval-agent-server",
+        target="source-minimal",
+        push=True,
+        sdk_project_root=_default_sdk_project_root(),
+    )
+
+    with (
+        patch.dict(
+            os.environ,
+            {"OPENHANDS_IMAGE_COMPRESSION": "estargz"},
+            clear=False,
+        ),
+        patch(
+            "openhands.agent_server.docker.build._make_build_context",
+            return_value=ctx,
+        ),
+        patch("openhands.agent_server.docker.build._run", side_effect=fake_run),
+        patch("openhands.agent_server.docker.build.shutil.rmtree"),
+    ):
+        build(opts)
+
+    cmd = docker_calls[0]
+    output_index = cmd.index("--output")
+    assert cmd[output_index + 1] == (
+        "type=registry,compression=estargz,force-compression=true,oci-mediatypes=true"
+    )
+    assert "--push" not in cmd
+
+
 def test_build_with_telemetry_preserves_telemetry_on_failure(tmp_path: Path):
     import pytest
 

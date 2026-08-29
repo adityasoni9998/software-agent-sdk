@@ -836,7 +836,17 @@ def build_with_telemetry(opts: BuildOptions) -> BuildResult:
         f"OPENHANDS_BUILD_GIT_REF={opts.git_ref}",
     ]
     if push:
-        args += ["--platform", ",".join(opts.platforms), "--push"]
+        args += ["--platform", ",".join(opts.platforms)]
+        if os.environ.get("OPENHANDS_IMAGE_COMPRESSION") == "estargz":
+            args += [
+                "--output",
+                (
+                    "type=registry,compression=estargz,force-compression=true,"
+                    "oci-mediatypes=true"
+                ),
+            ]
+        else:
+            args += ["--push"]
     else:
         args += ["--load"]
 
