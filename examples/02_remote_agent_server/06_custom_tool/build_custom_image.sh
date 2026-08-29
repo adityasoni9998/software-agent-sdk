@@ -14,7 +14,8 @@
 #          (default: docker.io/adityasoni8/codescout-agent-server-modal-workspace)
 #   CUSTOM_TAG: Tag component used by the SDK docker builder
 #               (default: codescout-modal)
-#   --push: Push the final short-SHA and stable source-minimal tags
+#   --push: Push the final short-SHA and stable source-minimal tags. Pushed
+#           images use eStargz compression by default for faster Modal pulls.
 
 set -e
 
@@ -48,6 +49,14 @@ done
 
 TARGET="${TARGET:-source-minimal}"
 PLATFORMS="${PLATFORMS:-linux/amd64}"
+IMAGE_COMPRESSION="${IMAGE_COMPRESSION:-estargz}"
+case "$IMAGE_COMPRESSION" in
+  estargz|gzip) ;;
+  *)
+    echo "IMAGE_COMPRESSION must be 'estargz' or 'gzip'" >&2
+    exit 2
+    ;;
+esac
 SHORT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD)"
 FINAL_TAG="${IMAGE}:${SHORT_SHA}-${CUSTOM_TAG}-${TARGET}"
 STABLE_TAG="${IMAGE}:${CUSTOM_TAG}-${TARGET}"
@@ -66,11 +75,19 @@ echo "Build context: $SCRIPT_DIR"
 echo ""
 
 if [ "$PUSH" = "1" ]; then
-  docker buildx build \
-    --platform "$PLATFORMS" \
-    --tag "$BASE_TAG" \
-    --push \
-    "$SCRIPT_DIR"
+  if [ "$IMAGE_COMPRESSION" = "estargz" ]; then
+    docker buildx build \
+      --platform "$PLATFORMS" \
+      --tag "$BASE_TAG" \
+      --output type=registry,compression=estargz,force-compression=true,oci-mediatypes=true \
+      "$SCRIPT_DIR"
+  else
+    docker buildx build \
+      --platform "$PLATFORMS" \
+      --tag "$BASE_TAG" \
+      --push \
+      "$SCRIPT_DIR"
+  fi
 else
   BUILDX_BUILDER="$BUILDX_BUILDER" docker build \
     -t "$BASE_TAG" \
@@ -83,11 +100,12 @@ echo "Final image repository: $IMAGE"
 echo "Custom tag component: $CUSTOM_TAG"
 echo "Target: $TARGET"
 echo "Platforms: $PLATFORMS"
+echo "Image compression: $IMAGE_COMPRESSION"
 echo "Buildx builder: $BUILDX_BUILDER_LABEL"
 echo ""
 
 if [ "$PUSH" = "1" ]; then
-  uv run python "$BUILD_PY" \
+  OPENHANDS_IMAGE_COMPRESSION="$IMAGE_COMPRESSION" uv run python "$BUILD_PY" \
     --base-image "$BASE_TAG" \
     --target "$TARGET" \
     --image "$IMAGE" \

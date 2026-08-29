@@ -151,6 +151,10 @@ docker.io/adityasoni8/codescout-agent-server-modal-workspace:<short-sha>-codesco
 docker.io/adityasoni8/codescout-agent-server-modal-workspace:codescout-modal-source-minimal
 ```
 
+Pushed images use eStargz compression by default, including recompression of
+inherited base layers, for faster registry pulls in Modal. Set
+`IMAGE_COMPRESSION=gzip` to use the standard BuildKit push path instead.
+
 Set the positional `IMAGE` and `CUSTOM_TAG` arguments to publish elsewhere.
 
 Use that final tag directly with `ApptainerWorkspace`:
